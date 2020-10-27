@@ -35,7 +35,7 @@ func (m *Anagram) Find(w string) []string {
 	return m.anagrams[prime]
 }
 
-func (m *Anagram) InsertWords(words ...string) {
+func (m *Anagram) Insert(words ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -55,7 +55,7 @@ func (m *Anagram) primify(w string) int64 {
 			return 1
 		}
 
-		out *= n
+		out = out * n
 	}
 
 	return out
@@ -66,13 +66,18 @@ func (m *Anagram) parseWordRunes(w string) int64 {
 	for _, r := range w {
 		r = unicode.ToLower(r)
 
-		next, ok := m.runes[r]
+		var (
+			next int64
+			ok   bool
+		)
+
+		next, ok = m.runes[r]
 		if !ok {
-			next := <-m.seqCh
+			next = <-m.seqCh
 			m.runes[r] = next
 		}
 
-		out *= next
+		out = out * next
 	}
 
 	return out

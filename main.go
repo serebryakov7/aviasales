@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -23,12 +24,17 @@ func main() {
 	var logger = log.New(os.Stdout, "", log.LstdFlags)
 	logger.Printf("successfully initialized logger\n")
 
-	osSignal := make(chan os.Signal, 1)
+	var (
+		done     = make(chan struct{})
+		osSignal = make(chan os.Signal, 1)
+	)
+
 	signal.Notify(osSignal, syscall.SIGINT, syscall.SIGTERM)
 
-	h := handler.NewHandler(logger, anagram.NewAnagram())
-
-	r := http.NewServeMux()
+	var (
+		r = http.NewServeMux()
+		h = handler.NewHandler(logger, anagram.NewAnagram())
+	)
 
 	r.Handle("/anagrams", h)
 
@@ -38,11 +44,22 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("starting http server at port: %d", *portPtr)
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			log.Panicf("http server serve error: %v", err)
+		sig := <-osSignal
+
+		log.Printf("os signal received: %s\n", sig.String())
+		log.Printf("perform graceful shutdown\n")
+
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("http server Shutdown: %v\n", err)
 		}
+
+		close(done)
 	}()
 
-	<-osSignal
+	log.Printf("starting http server at port: %d\n", *portPtr)
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Panicf("http server serve error: %v\n", err)
+	}
+
+	<-done
 }

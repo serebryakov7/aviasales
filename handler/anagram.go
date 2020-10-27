@@ -5,17 +5,20 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-
-	"github.com/serebryakov7/aviasales/anagram"
 )
+
+type finder interface {
+	Find(w string) []string
+	Insert(words ...string)
+}
 
 type handler struct {
 	log    *log.Logger
-	mapper *anagram.Anagram
+	finder finder
 }
 
-func NewHandler(log *log.Logger, m *anagram.Anagram) *handler {
-	return &handler{log: log, mapper: m}
+func NewHandler(log *log.Logger, m finder) *handler {
+	return &handler{log: log, finder: m}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +41,7 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := h.mapper.Find(word)
+	res := h.finder.Find(word)
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -50,16 +53,17 @@ func (h *handler) post(w http.ResponseWriter, r *http.Request) {
 
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer r.Body.Close()
 
 	if err := json.Unmarshal(data, &words); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	h.mapper.InsertWords(words...)
+	h.finder.Insert(words...)
 
 	w.WriteHeader(http.StatusNoContent)
 }
